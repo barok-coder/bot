@@ -4,8 +4,7 @@ from aiohttp import web
 from telegram.ext import Application, CommandHandler, MessageHandler, filters
 from src.config import TELEGRAM_BOT_TOKEN, logger
 from src.database import init_db
-from src.handlers import start_command, handle_message
-
+from src.handlers import start_command, handle_message, reset_command
 async def handle_ping(request):
     return web.Response(text="Bot is alive and polling!")
 
