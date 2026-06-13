@@ -1,17 +1,16 @@
+# src/handlers.py
 from telegram import Update
 from telegram.ext import ContextTypes
 from google import genai
 from google.genai import types
 from src.config import GEMINI_API_KEY, logger
-from src.database import add_user # Ensure this exists now!
+from src.database import add_user
 
 client = genai.Client(api_key=GEMINI_API_KEY)
 
 SYSTEM_INSTRUCTION = (
     "You are a professional, structured AI assistant. "
-    "Always use clear, bold headings for sections, use bullet points for lists, "
-    "and use code blocks for any technical expressions. "
-    "Keep your explanations concise and well-organized."
+    "Use bold headings, bullet points, and code blocks. Keep responses concise."
 )
 
 async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -27,7 +26,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await context.bot.send_chat_action(chat_id=update.effective_chat.id, action="typing")
     
     try:
-        # gemini-2.5-flash is the stable production model as of June 2026
+        # gemini-2.5-flash is stable and available
         response = client.models.generate_content(
             model="gemini-2.5-flash", 
             contents=update.message.text,
