@@ -1,5 +1,6 @@
 # src/database.py
+def init_db():
+    print("Database system initialized.")
 
-def add_user(user_id: int):
-    """Placeholder to log new users."""
-    print(f"Database: User {user_id} added.")
+def add_user(user_id):
+    print(f"User {user_id} added.")
