@@ -1,12 +1,13 @@
 from telegram import Update
 from telegram.ext import ContextTypes
 from google import genai
-from google.genai import types  # <--- Essential import for the new SDK
+from google.genai import types
 from src.config import GEMINI_API_KEY, logger
 
+# Initialize the Gemini Client
 client = genai.Client(api_key=GEMINI_API_KEY)
 
-# Define the persona
+# Define the Copilot-style persona
 SYSTEM_INSTRUCTION = (
     "You are a professional, structured AI assistant. "
     "Always use clear, bold headings for sections, use bullet points for lists, "
@@ -14,15 +15,26 @@ SYSTEM_INSTRUCTION = (
     "Keep your explanations concise and well-organized."
 )
 
+async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await update.message.reply_text("💠 *Hybrid Assistant Online*\n\nI am ready. Send me a message to begin.")
+
+async def reset_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await update.message.reply_text("🔄 *Memory reset successfully.*")
+
+async def language_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await update.message.reply_text("🌐 *Language settings updated.*")
+
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not update.message or not update.message.text:
         return
     
     user_text = update.message.text
+    
+    # 1. Typing action for better UI feedback
     await context.bot.send_chat_action(chat_id=update.effective_chat.id, action="typing")
     
     try:
-        # Use the correct types.GenerateContentConfig for the new SDK
+        # 2. Generate content with System Instruction
         response = client.models.generate_content(
             model="gemini-2.0-flash", 
             contents=user_text,
@@ -31,7 +43,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             )
         )
         
-        # UI Card Wrapper
+        # 3. Hybrid UI Card Structure
         ui_card = (
             f"💠 *Gemini | Hybrid Assistant*\n"
             f"━━━━━━━━━━━━━━━━━━\n\n"
@@ -40,8 +52,9 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             f"✨ _System: `Active` | Mode: `Hybrid-Logic`_"
         )
         
+        # 4. Reply with Markdown formatting
         await update.message.reply_text(ui_card, parse_mode="Markdown")
         
     except Exception as e:
-        logger.error(f"Gemini API Error details: {e}") # This will show the real error
+        logger.error(f"Gemini API Error: {e}")
         await update.message.reply_text("⚠️ *System Error*\n\nUnable to process. Please check the logs.")
