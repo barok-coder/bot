@@ -15,10 +15,10 @@ SYSTEM_INSTRUCTION = (
 
 async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     add_user(update.effective_user.id)
-    await update.message.reply_text("💠 *Hybrid Assistant Online*")
+    await update.message.reply_text("💠 this is Mintu's AI Assistant")
 
 async def reset_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text("🔄 *Memory reset.*")
+    await update.message.reply_text("🔄 Memory reset.")
 
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not update.message or not update.message.text: return
@@ -34,9 +34,9 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
         
         ui_card = (
-            f"💠 *Gemini | Hybrid Assistant*\n"
+            f"💠 This is | Mintu's AI Assistant\n"
             f"━━━━━━━━━━━━━━━━━━\n\n{response.text}\n\n"
-            f"━━━━━━━━━━━━━━━━━━\n✨ _System: `Active`_"
+            f"━━━━━━━━━━━━━━━━━━\"
         )
         await update.message.reply_text(ui_card, parse_mode="Markdown")
         
