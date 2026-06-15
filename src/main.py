@@ -1,9 +1,8 @@
 import logging
 import asyncio
 import sys
-from telegram.ext import Application
 
-from src.handlers import telegram_app, register_handlers
+from src.handlers import telegram_app
 
 # Configure clear logging output directly into Render's console panel
 logging.basicConfig(
@@ -20,15 +19,18 @@ def main():
     try:
         logger.info("Initializing background worker engine...")
         
-        # 1. Force clear any lingering webhook channels on Telegram's core servers
+        # 1. Clear out any lingering webhook channels on Telegram's servers
         logger.info("Flushing legacy webhook routes from cloud instances...")
-        asyncio.run(telegram_app.bot.delete_webhook(drop_pending_updates=True))
+        
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+        loop.run_until_complete(telegram_app.bot.delete_webhook(drop_pending_updates=True))
         
         # 2. Run the native long polling execution loop block
         logger.info("Ecosystem initialized successfully. Polling channel is now LIVE 🎉")
         
-        # This blocks execution and maintains an open connection channel permanently
-        telegram_app.run_polling(close_loop=False)
+        # This keeps the background process alive and listening continuously
+        telegram_app.run_polling(drop_pending_updates=True)
         
     except Exception as err:
         logger.critical(f"Fatal crash inside background process runtime loop: {err}")
