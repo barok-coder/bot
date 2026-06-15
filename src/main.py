@@ -1,42 +1,76 @@
-from contextlib import asynccontextmanager
-from fastapi import FastAPI, Request, status
-from fastapi.responses import Response
-from telegram import Update
 import os
+import logging
+from contextlib import asynccontextmanager
+from fastapi import FastAPI, Request, Response, status
+from telegram import Update
 
 from src.handlers import telegram_app, settings
 
-# 1. Use an async lifecycle to initialize and cleanly close the Telegram application
+# Set up clean logging visibility
+logger = logging.getLogger("telegram_gemini_bot.main")
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # Set up the webhook target address pointing to your unique Render Web URL
-    # Replace with your actual Render URL or use an environment variable
-    RENDER_URL = os.environ.get("RENDER_EXTERNAL_URL", "https://your-bot-subdomain.onrender.com")
-    webhook_url = f"{RENDER_URL}/telegram-webhook"
+    """
+    Manages the ecosystem lifecycle. Registers webhooks when the Render 
+    container spins up and cleans up hooks when cycling states.
+    """
+    # Fetch Render's automatically injected public URL path string
+    render_url = os.environ.get("RENDER_EXTERNAL_URL")
     
+    if not render_url:
+        logger.error("CRITICAL: RENDER_EXTERNAL_URL environment variable is missing!")
+        render_url = "https://your-custom-app-subdomain.onrender.com"
+        
+    webhook_target = f"{render_url.rstrip('/')}/telegram-webhook"
+    logger.info(f"Establishing primary connection route at: {webhook_target}")
+
+    # Initialize components inside the active event loop
     await telegram_app.initialize()
-    await telegram_app.updater.set_webhook(url=webhook_url)
+    
+    # CORRECT INTERFACE CALL: Use telegram_app.bot to establish the webhook matrix
+    await telegram_app.bot.set_webhook(url=webhook_target, drop_pending_updates=True)
+    
     await telegram_app.start()
+    
+    logger.info("Bot ecosystem routing verified. Event pipeline active.")
     yield
-    # Clean shutdown handling when Render cycles containers
-    await telegram_app.updater.delete_webhook()
+    
+    # Tear down pipelines gracefully on host termination signals
+    logger.info("Disconnecting webhook channels...")
     await telegram_app.stop()
     await telegram_app.shutdown()
 
+
+# Initialize the primary FastAPI routing instance using the explicit lifecycle hook
 app = FastAPI(lifespan=lifespan)
 
-# 2. Endpoint to receive incoming binary payload updates pushed from Telegram
+
 @app.post("/telegram-webhook")
-async def handle_webhook(request: Request):
+async def handle_telegram_updates(request: Request):
+    """
+    Listens directly to incoming POST update matrices from Telegram servers.
+    """
     try:
         payload = await request.json()
-        update = Update.de_json(payload, telegram_app.bot)
+        
+        # Coerce raw dictionary blocks into an explicit, structured Update profile
+        update = Update.de_json(data=payload, bot=telegram_app.bot)
+        
+        # Feed the update straight into your handler registration tree inside src/handlers.py
         await telegram_app.process_update(update)
-        return Response(status_code=status.HTTP_200_OK)
-    except Exception as e:
-        # Prevents Telegram from spamming retries if an update crashes internally
-        return Response(status_code=status.HTTP_200_OK)
+        
+    except Exception as err:
+        logger.error(f"Error handling incoming update payload matrix: {err}")
+        
+    # Always send a 200 OK block back immediately so Telegram stops spamming retries
+    return Response(status_code=status.HTTP_200_OK)
 
+
+@app.get("/")
 @app.get("/healthz")
-async def health_check():
-    return {"status": "healthy"}
+async def server_health_check():
+    """
+    Keeps Render's automated platform monitoring systems green.
+    """
+    return {"status": "operational", "engine": "FastAPI + Gemini Bot Core"}
