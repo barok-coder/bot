@@ -1,7 +1,10 @@
 from collections import defaultdict, deque
 from dataclasses import dataclass, field
 
-from .config import settings
+try:
+    from .config import settings
+except ImportError:
+    from config import settings
 
 
 @dataclass
