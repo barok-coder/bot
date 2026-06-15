@@ -122,72 +122,36 @@ def guide_keyboard() -> InlineKeyboardMarkup:
 
 
 def format_header(title: str, subtitle: str | None = None) -> str:
-    lines = [f"<b>{title.upper()}</b>", DIVIDER]
     if subtitle:
-        lines.append(f"<i>{subtitle}</i>")
-    return "\n".join(lines)
+        return f"<b>{title.upper()}</b>\n{DIVIDER}\n<i>{subtitle}</i>"
+    return f"<b>{title.upper()}</b>\n{DIVIDER}"
 
 
 def welcome_text(first_name: str | None) -> str:
     name = first_name or "User"
-    return "\n".join(
-        [
-            format_header("Gemini AI Core", f"Welcome, {name}."),
-            "",
-            "A clean, cloud-hosted assistant powered by Google Gemini AI.",
-            "",
-            "• Submit text queries, images, or document files",
-            "• Tune response engines via settings",
-            "• Explore documentation guides",
-            "• Track session token metadata profiles",
-            "",
-            "Interact with the terminal menu below or attach media to begin.",
-        ]
-    )
+    header = format_header("Gemini AI Core", f"Welcome, {name}.")
+    return f"""{header}
+
+A clean, cloud-hosted assistant powered by Google Gemini AI.
+
+• Submit text queries, images, or document files
+• Tune response engines via settings
+• Explore documentation guides
+• Track session token metadata profiles
+
+Interact with the terminal menu below or attach media to begin."""
 
 
 def settings_text(user: UserSettings) -> str:
     concise_flag = "Enabled" if user.concise_mode else "Disabled"
     rich_flag = "Enabled" if user.rich_ui else "Disabled"
+    header = format_header("System Settings", "Configure engine behavioral traits.")
     
-    return "\n".join(
-        [
-            format_header("System Settings", "Configure engine behavioral traits."),
-            "",
-            f"<b>Engine Model:</b> <code>{settings.gemini_model}</code>",
-            f"<b>Temperature:</b> <code>{user.temperature}</code> ({user.temperature_label})",
-            f"<b>Concise Mode:</b> <code>{concise_flag}</code>",
-            f"<b>Rich UI Elements:</b> <code>{rich_flag}</code>",
-            "",
-            "Select an interface option below to update configurations.",
-        ]
-    )
+    return f"""{header}
 
+<b>Engine Model:</b> <code>{settings.gemini_model}</code>
+<b>Temperature:</b> <code>{user.temperature}</code> ({user.temperature_label})
+<b>Concise Mode:</b> <code>{concise_flag}</code>
+<b>Rich UI Elements:</b> <code>{rich_flag}</code>
 
-def guide_text() -> str:
-    return "\n".join(
-        [
-            format_header("Operational Guide", "System control panel documentation."),
-            "",
-            "<b>Ask Gemini AI</b>",
-            "Processes code inquiries, explanations, study modules, or text generation tasks.",
-            "",
-            "<b>Multimodal Inputs</b>",
-            "Send an image or attach a file directly. You can add a caption with your question alongside the attachment.",
-            "",
-            "<b>Bot Settings</b>",
-            "Adjust system creativity indexes: Creative (0.95), Balanced (0.7), or Precise (0.25).",
-            "",
-            "<b>Token Status</b>",
-            "Evaluates structural payload usage for the active runtime instance environment.",
-        ]
-    )
-
-
-def token_status_text(user: UserSettings) -> str:
-    return "\n".join(
-        [
-            format_header("Token Payload Diagnostics", "Live runtime performance parameters."),
-            "",
-            f"<b>Prompt Metrics:</b> <code>{user.prompt_tokens}</code>",
-            f"<b>Response Metrics:</b> <code>{
+Select an interface option below to update
