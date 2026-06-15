@@ -33,6 +33,7 @@ logger = logging.getLogger("telegram_gemini_bot.handlers")
 settings.validate()
 
 telegram_app = Application.builder().token(settings.bot_token).build()
+# Initializing the unified GenAI Client
 gemini_client = genai.Client(api_key=settings.gemini_api_key)
 
 MENU_ASK = "Ask Gemini AI"
@@ -243,7 +244,8 @@ def update_token_usage(chat_id: int, usage_metadata: object) -> None:
 async def ask_gemini(chat_id: int, user_text: str) -> str:
     user = db.get_user(chat_id)
     
-    response = await gemini_client.aio.models.generate_content(
+    # Correct Async Generation SDK format: client.models.generate_content (without aio submodule namespace)
+    response = await gemini_client.models.generate_content(
         model=settings.gemini_model,
         contents=build_prompt(chat_id, user_text),
         config=types.GenerateContentConfig(
@@ -291,7 +293,7 @@ async def safe_edit_text(message, text: str, reply_markup=None) -> None:
             disable_web_page_preview=True,
         )
     except Exception:
-        # Secure fallback if Gemini generates raw unclosed syntax characters like < or >
+        # Secure safety layer if text contains unclosed '<' or '>' characters
         await message.edit_text(
             html.escape(chunks[0]),
             parse_mode=None,
