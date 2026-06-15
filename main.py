@@ -1,42 +1,81 @@
-import os
-import asyncio
-import threading
-from aiohttp import web
-from telegram.ext import ApplicationBuilder, CommandHandler, MessageHandler, filters
-from src.handlers import start_command, handle_message, reset_command
-from src.database import init_db
+import logging
+from contextlib import asynccontextmanager
 
-# --- Dummy Web Server to satisfy Render Free Tier ---
-async def handle(request):
-    return web.Response(text="Bot is running!")
+import uvicorn
+from fastapi import FastAPI, Header, HTTPException, Request
+from telegram import Update
 
-async def start_web_server():
-    app = web.Application()
-    app.add_routes([web.get('/', handle)])
-    runner = web.AppRunner(app)
-    await runner.setup()
-    # Render provides the PORT in an environment variable
-    port = int(os.environ.get("PORT", 8080))
-    site = web.TCPSite(runner, '0.0.0.0', port)
-    await site.start()
+from .config import settings
+from .handlers import telegram_app
 
-def run_web_server():
-    loop = asyncio.new_event_loop()
-    asyncio.set_event_loop(loop)
-    loop.run_until_complete(start_web_server())
-    loop.run_forever()
 
-# --- Main Bot Logic ---
+logging.basicConfig(
+    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+    level=settings.log_level,
+)
+logger = logging.getLogger("telegram_gemini_bot")
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    await telegram_app.initialize()
+    await telegram_app.start()
+
+    if settings.webhook_url:
+        await telegram_app.bot.set_webhook(
+            url=settings.webhook_endpoint(),
+            secret_token=settings.webhook_secret or None,
+            allowed_updates=Update.ALL_TYPES,
+            drop_pending_updates=True,
+        )
+        logger.info("Telegram webhook set to %s", settings.webhook_endpoint())
+    else:
+        logger.warning("WEBHOOK_URL is not set. Telegram will not receive updates.")
+
+    try:
+        yield
+    finally:
+        if settings.webhook_url and settings.delete_webhook_on_shutdown:
+            await telegram_app.bot.delete_webhook(drop_pending_updates=False)
+        await telegram_app.stop()
+        await telegram_app.shutdown()
+
+
+api = FastAPI(title="Telegram Gemini Bot", lifespan=lifespan)
+
+
+@api.get("/")
+async def root():
+    return {
+        "status": "ok",
+        "service": "telegram-gemini-bot",
+        "mode": "webhook",
+        "health": "/health",
+    }
+
+
+@api.get("/health")
+async def health():
+    return {
+        "status": "healthy",
+        "telegram": "ready",
+        "gemini_model": settings.gemini_model,
+    }
+
+
+@api.post(settings.normalized_webhook_path())
+async def telegram_webhook(
+    request: Request,
+    x_telegram_bot_api_secret_token: str | None = Header(default=None),
+):
+    if settings.webhook_secret and x_telegram_bot_api_secret_token != settings.webhook_secret:
+        raise HTTPException(status_code=403, detail="Invalid webhook secret.")
+
+    data = await request.json()
+    update = Update.de_json(data, telegram_app.bot)
+    await telegram_app.process_update(update)
+    return {"ok": True}
+
+
 if __name__ == "__main__":
-    # Start the dummy web server in a separate thread
-    threading.Thread(target=run_web_server, daemon=True).start()
-    
-    init_db()
-    app = ApplicationBuilder().token(os.environ.get("TELEGRAM_TOKEN")).build()
-    
-    app.add_handler(CommandHandler("start", start_command))
-    app.add_handler(CommandHandler("reset", reset_command))
-    app.add_handler(MessageHandler(filters.TEXT & (~filters.COMMAND), handle_message))
-    
-    print("Bot is running...")
-    app.run_polling()
+    uvicorn.run(api, host="0.0.0.0", port=settings.port)
