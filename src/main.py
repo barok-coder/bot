@@ -1,13 +1,11 @@
 from contextlib import asynccontextmanager
-
-
-# 1. IMPORT the telegram_app we defined in your handlers file
-# (Adjust the path if your handlers code is in a file named handlers.py)
-from src.handlers import telegram_app  
+from fastapi import FastAPI
+# Import your telegram application variable from handlers
+from src.handlers import telegram_app 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # 2. This will now work perfectly because it's imported above!
+    # This initializes your bot on web service startup
     await telegram_app.initialize()
     await telegram_app.start()
     
@@ -16,6 +14,11 @@ async def lifespan(app: FastAPI):
     await telegram_app.stop()
     await telegram_app.shutdown()
 
+# Initialize the application instance here directly
 app = FastAPI(lifespan=lifespan)
 
-# Rest of your FastAPI routes (like webhooks) go below...
+@app.get("/")
+async def root():
+    return {"status": "running"}
+
+# Add your webhook or other FastAPI routes below...
