@@ -26,7 +26,7 @@ try:
     from .database import UserSettings, db
 except ImportError:
     from config import settings
-    from database import UserSettings, db
+    from database import db
 
 
 logger = logging.getLogger("telegram_gemini_bot.handlers")
@@ -483,3 +483,98 @@ async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
 
     if text == MENU_GUIDE:
         await show_guide(update, context)
+        return
+
+    if text == MENU_TOKENS:
+        await show_tokens(update, context)
+        return
+
+    await context.bot.send_chat_action(chat_id=chat_id, action=ChatAction.TYPING)
+    
+    placeholder = await update.message.reply_text(
+        "<b>Processing Query...</b>\n" + DIVIDER + "\n<i>Analyzing transaction instructions...</i>",
+        parse_mode="HTML",
+    )
+
+    try:
+        answer = await ask_gemini(chat_id, text)
+        await safe_edit_text(placeholder, format_ai_response(answer, user))
+    except Exception:
+        logger.exception("Failed to generate Gemini response")
+        header = format_header("Processing Interrupted", "Core framework could not execute statement.")
+        await safe_edit_text(
+            placeholder,
+            header + "\n\nReview environmental API tokens, configuration parameters, and cluster logging streams.",
+        )
+
+
+async def handle_multimodal(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    chat_id = update.effective_chat.id
+    user = db.get_user(chat_id)
+    
+    caption = (update.message.caption or "Analyze this file attachment in detail.").strip()
+    
+    await context.bot.send_chat_action(chat_id=chat_id, action=ChatAction.TYPING)
+    
+    placeholder = await update.message.reply_text(
+        "<b>Downloading Media Payload...</b>\n" + DIVIDER + "\n<i>Streaming binary data blocks to cluster engine...</i>",
+        parse_mode="HTML",
+    )
+
+    local_path = None
+    try:
+        if update.message.document:
+            telegram_file = await context.bot.get_file(update.message.document.file_id)
+            filename = update.message.document.file_name or "attached_doc"
+        elif update.message.photo:
+            telegram_file = await context.bot.get_file(update.message.photo[-1].file_id)
+            filename = "attached_image.jpg"
+        else:
+            await safe_edit_text(placeholder, "Unsupported transmission payload format.")
+            return
+
+        local_path = os.path.join("/tmp", str(chat_id) + "_" + str(filename))
+        await telegram_file.download_to_drive(custom_path=local_path)
+        
+        await placeholder.edit_text(
+            "<b>Processing Multimodal Matrix...</b>\n" + DIVIDER + "\n<i>Executing AI neural parsing pass...</i>",
+            parse_mode="HTML"
+        )
+        
+        answer = await ask_gemini(chat_id, caption, file_path=local_path)
+        await safe_edit_text(placeholder, format_ai_response(answer, user))
+
+    except Exception:
+        logger.exception("Multimodal transaction routine runtime crash")
+        await safe_edit_text(
+            placeholder,
+            "<b>Processing Interrupted</b>\n──────────────────────────────\nCore engine failed to decode media payload blocks cleanly."
+        )
+    finally:
+        if local_path and os.path.exists(local_path):
+            try:
+                os.remove(local_path)
+            except Exception:
+                pass
+
+
+def register_handlers() -> None:
+    global telegram_app
+    
+    telegram_app.add_handler(CommandHandler("start", start))
+    telegram_app.add_handler(CommandHandler("help", help_command))
+    telegram_app.add_handler(CommandHandler("reset", reset_command))
+    telegram_app.add_handler(CallbackQueryHandler(handle_callback))
+    
+    telegram_app.add_handler(
+        MessageHandler(filters.PHOTO | filters.Document.ALL, handle_multimodal)
+    )
+    
+    telegram_app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_text))
+
+
+register_handlers()
+
+
+def get_telegram_app() -> Application:
+    return telegram_app
