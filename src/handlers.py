@@ -163,4 +163,13 @@ def register_handlers() -> None:
     telegram_app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_text))
 
 
-register_handlers()
+def register_handlers() -> None:
+    global telegram_app
+    if "telegram_app" not in globals():
+        telegram_app = Application.builder().token(settings.bot_token).build()
+
+    telegram_app.add_handler(CommandHandler("start", start))
+    telegram_app.add_handler(CommandHandler("help", help_command))
+    telegram_app.add_handler(CommandHandler("reset", reset_command))
+    telegram_app.add_handler(CallbackQueryHandler(handle_callback))
+    telegram_app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_text))
