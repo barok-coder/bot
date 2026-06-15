@@ -1,5 +1,5 @@
 from contextlib import asynccontextmanager
-from src.main import app as api
+
 
 # 1. IMPORT the telegram_app we defined in your handlers file
 # (Adjust the path if your handlers code is in a file named handlers.py)
