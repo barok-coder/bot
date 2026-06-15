@@ -19,8 +19,12 @@ from telegram.ext import (
     filters,
 )
 
-from .config import settings
-from .database import UserSettings, db
+try:
+    from .config import settings
+    from .database import UserSettings, db
+except ImportError:
+    from config import settings
+    from database import UserSettings, db
 
 
 logger = logging.getLogger("telegram_gemini_bot.handlers")
@@ -94,7 +98,3 @@ def settings_keyboard(user: UserSettings) -> InlineKeyboardMarkup:
     rich_status = "✅ Rich UI" if user.rich_ui else "⬜ Rich UI"
 
     return InlineKeyboardMarkup(
-        [
-            [
-                InlineKeyboardButton("🔥 Creative", callback_data="temp:creative"),
-                InlineKeyboardButton("⚖️ Balanced", callback_data="temp:balanced"),
