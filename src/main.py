@@ -6,7 +6,6 @@ from telegram import Update
 
 from src.handlers import telegram_app, settings
 
-# Set up clean logging visibility
 logger = logging.getLogger("telegram_gemini_bot.main")
 
 @asynccontextmanager
@@ -28,9 +27,10 @@ async def lifespan(app: FastAPI):
     # Initialize components inside the active event loop
     await telegram_app.initialize()
     
-    # CORRECT INTERFACE CALL: Use telegram_app.bot to establish the webhook matrix
+    # Establish the webhook directly on Telegram's servers
     await telegram_app.bot.set_webhook(url=webhook_target, drop_pending_updates=True)
     
+    # Start the application instance context loop
     await telegram_app.start()
     
     logger.info("Bot ecosystem routing verified. Event pipeline active.")
@@ -57,8 +57,8 @@ async def handle_telegram_updates(request: Request):
         # Coerce raw dictionary blocks into an explicit, structured Update profile
         update = Update.de_json(data=payload, bot=telegram_app.bot)
         
-        # Feed the update straight into your handler registration tree inside src/handlers.py
-        await telegram_app.process_update(update)
+        # DEFINITIVE V20+ FIX: Push directly to the native framework update queue
+        await telegram_app.update_queue.put(update)
         
     except Exception as err:
         logger.error(f"Error handling incoming update payload matrix: {err}")
