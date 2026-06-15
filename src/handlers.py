@@ -97,4 +97,4 @@ def settings_keyboard(user: UserSettings) -> InlineKeyboardMarkup:
     concise_status = "✅ Concise" if user.concise_mode else "⬜ Concise"
     rich_status = "✅ Rich UI" if user.rich_ui else "⬜ Rich UI"
 
-    return InlineKeyboardMarkup(
+    keyboard = [
