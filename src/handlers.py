@@ -31,54 +31,14 @@ logger = logging.getLogger("telegram_gemini_bot.handlers")
 
 settings.validate()
 
-# --- Initialize variables globally and immediately so they are available to lifespan imports ---
 telegram_app = Application.builder().token(settings.bot_token).build()
 gemini_client = genai.Client(api_key=settings.gemini_api_key)
 
-E_BRAIN = "\U0001f9e0"
-E_GEAR = "\u2699\ufe0f"
-E_SCROLL = "\U0001f4dc"
-E_CHART = "\U0001f4ca"
-E_FIRE = "\U0001f525"
-E_SCALE = "\u2696\ufe0f"
-E_TARGET = "\U0001f3af"
-E_CHECK = "\u2705"
-E_BOX = "\u2b1c"
-E_BROOM = "\U0001f9f9"
-E_ROCKET = "\U0001f680"
-E_SPARK = "\u26a1"
-E_SCISSORS = "\u2702\ufe0f"
-E_STARS = "\u2728"
-E_CHAT = "\U0001f4ac"
-E_DIAMOND_BLUE = "\U0001f539"
-E_DIAMOND_ORANGE = "\U0001f538"
-E_SEARCH = "\U0001f50d"
-E_TOOLS = "\U0001f6e0\ufe0f"
-E_TEMP = "\U0001f321\ufe0f"
-E_BULLET = "\u2022"
-
-MENU_ASK = f"{E_BRAIN} Ask Gemini AI"
-MENU_SETTINGS = f"{E_GEAR} Bot Settings"
-MENU_GUIDE = f"{E_SCROLL} Feature Guide"
-MENU_TOKENS = f"{E_CHART} Token Status"
-DIVIDER = "\u2500" * 15
-
-
-def escape_md(text: object) -> str:
-    raw = "" if text is None else str(text)
-    return re.sub(r"([_*\[\]()~`>#+\-=|{}.!\\])", r"\\\1", raw)
-
-
-def inline_code(text: object) -> str:
-    raw = "" if text is None else str(text)
-    safe = raw.replace("\\", "\\\\").replace("`", "\\`")
-    return f"`{safe}`"
-
-
-def code_block(text: object) -> str:
-    raw = "" if text is None else str(text)
-    safe = raw.replace("\\", "\\\\").replace("`", "\\`")
-    return f"```text\n{safe}\n```"
+MENU_ASK = "Ask Gemini AI"
+MENU_SETTINGS = "Bot Settings"
+MENU_GUIDE = "Feature Guide"
+MENU_TOKENS = "Token Status"
+DIVIDER = "──────────────────────────────"
 
 
 def split_message(text: str, limit: int = 3900) -> list[str]:
@@ -117,15 +77,15 @@ def main_menu() -> ReplyKeyboardMarkup:
 
 
 def settings_keyboard(user: UserSettings) -> InlineKeyboardMarkup:
-    concise_status = f"{E_CHECK} Concise" if user.concise_mode else f"{E_BOX} Concise"
-    rich_status = f"{E_CHECK} Rich UI" if user.rich_ui else f"{E_BOX} Rich UI"
+    concise_status = "Concise: ON" if user.concise_mode else "Concise: OFF"
+    rich_status = "Rich UI: ON" if user.rich_ui else "Rich UI: OFF"
 
     keyboard = list()
     keyboard.append(
         [
-            InlineKeyboardButton(f"{E_FIRE} Creative", callback_data="temp:creative"),
-            InlineKeyboardButton(f"{E_SCALE} Balanced", callback_data="temp:balanced"),
-            InlineKeyboardButton(f"{E_TARGET} Precise", callback_data="temp:precise"),
+            InlineKeyboardButton("Creative", callback_data="temp:creative"),
+            InlineKeyboardButton("Balanced", callback_data="temp:balanced"),
+            InlineKeyboardButton("Precise", callback_data="temp:precise"),
         ]
     )
     keyboard.append(
@@ -135,7 +95,7 @@ def settings_keyboard(user: UserSettings) -> InlineKeyboardMarkup:
         ]
     )
     keyboard.append(
-        [InlineKeyboardButton(f"{E_BROOM} Reset Memory", callback_data="memory:reset")]
+        [InlineKeyboardButton("Reset Memory", callback_data="memory:reset")]
     )
 
     return InlineKeyboardMarkup(keyboard)
@@ -145,14 +105,14 @@ def guide_keyboard() -> InlineKeyboardMarkup:
     keyboard = list()
     keyboard.append(
         [
-            InlineKeyboardButton(f"{E_GEAR} Open Settings", callback_data="open:settings"),
-            InlineKeyboardButton(f"{E_CHART} Token Status", callback_data="open:tokens"),
+            InlineKeyboardButton("Open Settings", callback_data="open:settings"),
+            InlineKeyboardButton("Token Status", callback_data="open:tokens"),
         ]
     )
     keyboard.append(
         [
-            InlineKeyboardButton(f"{E_FIRE} Creative Mode", callback_data="temp:creative"),
-            InlineKeyboardButton(f"{E_TARGET} Precise Mode", callback_data="temp:precise"),
+            InlineKeyboardButton("Creative Mode", callback_data="temp:creative"),
+            InlineKeyboardButton("Precise Mode", callback_data="temp:precise"),
         ]
     )
 
@@ -160,26 +120,26 @@ def guide_keyboard() -> InlineKeyboardMarkup:
 
 
 def format_header(title: str, subtitle: str | None = None) -> str:
-    lines = [f"*{escape_md(title)}*", escape_md(DIVIDER)]
+    lines = [f"<b>{title.upper()}</b>", DIVIDER]
     if subtitle:
-        lines.append(escape_md(subtitle))
+        lines.append(f"<i>{subtitle}</i>")
     return "\n".join(lines)
 
 
 def welcome_text(first_name: str | None) -> str:
-    name = first_name or "there"
+    name = first_name or "User"
     return "\n".join(
         [
-            format_header(f"{E_ROCKET} Gemini AI Bot", f"Welcome, {name}."),
+            format_header("Gemini AI Core", f"Welcome, {name}."),
             "",
-            escape_md("A vibrant Telegram assistant powered by Google AI."),
+            "A clean, cloud-hosted assistant powered by Google Gemini AI.",
             "",
-            f"{E_BRAIN} *Ask smart questions*",
-            f"{E_GEAR} *Tune response style*",
-            f"{E_SCROLL} *Explore interactive features*",
-            f"{E_CHART} *Track session token usage*",
+            "• Submit complex questions or prompts",
+            "• Tune response engines via settings",
+            "• Explore documentation guides",
+            "• Track session token metadata profiles",
             "",
-            escape_md("Use the menu below to begin."),
+            "Interact with the terminal menu below to begin.",
         ]
     )
 
@@ -187,14 +147,14 @@ def welcome_text(first_name: str | None) -> str:
 def settings_text(user: UserSettings) -> str:
     return "\n".join(
         [
-            format_header(f"{E_GEAR} Bot Settings", "Tune how Gemini responds in this chat."),
+            format_header("System Settings", "Configure engine behavioral traits."),
             "",
-            f"{E_BRAIN} *Model:* {inline_code(settings.gemini_model)}",
-            f"{E_TEMP} *Temperature:* {inline_code(user.temperature)} \\({escape_md(user.temperature_label)}\\)",
-            f"{E_SCISSORS} *Concise Mode:* {inline_code('On' if user.concise_mode else 'Off')}",
-            f"{E_STARS} *Rich UI:* {inline_code('On' if user.rich_ui else 'Off')}",
+            f"<b>Engine Model:</b> <code>{settings.gemini_model}</code>",
+            f"<b>Temperature:</b> <code>{user.temperature}</code> ({user.temperature_label})",
+            f"<b>Concise Mode:</b> <code>{'Enabled' if user.concise_mode else 'Disabled'}</code>",
+            f"<b>Rich UI Elements:</b> <code>{'Enabled' if user.rich_ui else 'Disabled'}</code>",
             "",
-            escape_md("Use the buttons below to update your experience instantly."),
+            "Select an interface option below to update configurations.",
         ]
     )
 
@@ -202,19 +162,19 @@ def settings_text(user: UserSettings) -> str:
 def guide_text() -> str:
     return "\n".join(
         [
-            format_header(f"{E_SCROLL} Feature Guide", "Your premium Gemini control center."),
+            format_header("Operational Guide", "System control panel documentation."),
             "",
-            f"{E_BRAIN} *Ask Gemini AI*",
-            escape_md("Send any question, idea, draft, code issue, or study topic."),
+            "<b>Ask Gemini AI</b>",
+            "Processes code inquiries, explanations, study modules, or text generation tasks.",
             "",
-            f"{E_GEAR} *Bot Settings*",
-            escape_md("Switch between creative, balanced, and precise response styles."),
+            "<b>Bot Settings</b>",
+            "Adjust system creativity indexes: Creative (0.95), Balanced (0.7), or Precise (0.25).",
             "",
-            f"{E_CHART} *Token Status*",
-            escape_md("See your approximate Gemini token usage for this bot session."),
+            "<b>Token Status</b>",
+            "Evaluates structural payload usage for the active runtime instance environment.",
             "",
-            f"{E_CHAT} *Quick Tip*",
-            code_block("Explain this like I am new to it: async webhooks in Telegram bots"),
+            "<b>Quick Syntax Prototype</b>",
+            "<code>Explain this concept like I am new to it: Webhooks vs Polling</code>",
         ]
     )
 
@@ -222,13 +182,13 @@ def guide_text() -> str:
 def token_status_text(user: UserSettings) -> str:
     return "\n".join(
         [
-            format_header(f"{E_CHART} Token Status", "Approximate usage for this live bot session."),
+            format_header("Token Payload Diagnostics", "Live runtime performance parameters."),
             "",
-            f"{E_DIAMOND_BLUE} *Prompt Tokens:* {inline_code(user.prompt_tokens)}",
-            f"{E_DIAMOND_ORANGE} *Response Tokens:* {inline_code(user.response_tokens)}",
-            f"{E_SPARK} *Total Tokens:* {inline_code(user.total_tokens)}",
+            f"<b>Prompt Metrics:</b> <code>{user.prompt_tokens}</code>",
+            f"<b>Response Metrics:</b> <code>{user.response_tokens}</code>",
+            f"<b>Aggregate Context:</b> <code>{user.total_tokens}</code>",
             "",
-            escape_md("Usage resets when the Render service restarts on the free plan."),
+            "Note: Payload counters cycle when the hosting container switches states.",
         ]
     )
 
@@ -236,12 +196,12 @@ def token_status_text(user: UserSettings) -> str:
 def prompt_for_question_text(user: UserSettings) -> str:
     return "\n".join(
         [
-            format_header(f"{E_BRAIN} Ask Gemini AI", "Send your question in the next message."),
+            format_header("Input Request Mode", "Awaiting query payload entry..."),
             "",
-            f"{E_SPARK} *Current Mode:* {inline_code(user.temperature_label)}",
-            f"{E_SCISSORS} *Concise:* {inline_code('On' if user.concise_mode else 'Off')}",
+            f"<b>Active Target Engine:</b> <code>{user.temperature_label}</code>",
+            f"<b>Compression Protocol:</b> <code>{'Concise' if user.concise_mode else 'Standard'}</code>",
             "",
-            escape_md("Try: Build me a 7-day learning plan for Python webhooks."),
+            "Prototyping Example: Compile an object-oriented paradigm roadmap.",
         ]
     )
 
@@ -250,9 +210,9 @@ def build_prompt(chat_id: int, user_text: str) -> str:
     user = db.get_user(chat_id)
 
     if user.concise_mode:
-        style_note = "Keep the answer tight and practical."
+        style_note = "Keep the answer tight, optimized, and highly practical."
     else:
-        style_note = "Use helpful detail and clean structure."
+        style_note = "Use helpful professional details and clear structural organization."
 
     history_lines = []
     recent_history = list(user.history)[-settings.max_history_messages :]
@@ -281,18 +241,20 @@ def update_token_usage(chat_id: int, usage_metadata: object) -> None:
 
 async def ask_gemini(chat_id: int, user_text: str) -> str:
     user = db.get_user(chat_id)
+    
+    # WE SET max_output_tokens=1000 HERE DIRECTLY
     response = await gemini_client.aio.models.generate_content(
         model=settings.gemini_model,
         contents=build_prompt(chat_id, user_text),
         config=types.GenerateContentConfig(
             temperature=user.temperature,
-            max_output_tokens=settings.max_output_tokens,
+            max_output_tokens=10000,
         ),
     )
 
     answer = (response.text or "").strip()
     if not answer:
-        answer = "I could not generate a response this time. Please try again."
+        answer = "System failed to generate text output. Please re-verify query params."
 
     usage_metadata = getattr(response, "usage_metadata", None)
     if usage_metadata:
@@ -304,17 +266,17 @@ async def ask_gemini(chat_id: int, user_text: str) -> str:
 
 def format_ai_response(answer: str, user: UserSettings) -> str:
     if not user.rich_ui:
-        return escape_md(answer)
+        return answer
 
     return "\n".join(
         [
-            f"*{E_BRAIN} Gemini Response*",
-            escape_md(DIVIDER),
-            escape_md(answer),
+            "<b>GENAI RESPONSE ENGINE</b>",
+            DIVIDER,
+            answer,
             "",
-            escape_md(DIVIDER),
-            f"{E_GEAR} *Mode:* {inline_code(user.temperature_label)}  {E_BULLET}  "
-            f"{E_SPARK} *Tokens:* {inline_code(user.total_tokens)}",
+            DIVIDER,
+            f"<b>Profile:</b> <code>{user.temperature_label}</code>  |  "
+            f"<b>Tokens:</b> <code>{user.total_tokens}</code>",
         ]
     )
 
@@ -323,7 +285,7 @@ async def safe_edit_text(message, text: str, reply_markup=None) -> None:
     chunks = split_message(text)
     await message.edit_text(
         chunks[0],
-        parse_mode=ParseMode.MARKDOWN_V2,
+        parse_mode=ParseMode.HTML,
         reply_markup=reply_markup,
         disable_web_page_preview=True,
     )
@@ -331,7 +293,7 @@ async def safe_edit_text(message, text: str, reply_markup=None) -> None:
     for chunk in chunks[1:]:
         await message.reply_text(
             chunk,
-            parse_mode=ParseMode.MARKDOWN_V2,
+            parse_mode=ParseMode.HTML,
             disable_web_page_preview=True,
         )
 
@@ -340,7 +302,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     first_name = update.effective_user.first_name if update.effective_user else None
     await update.message.reply_text(
         welcome_text(first_name),
-        parse_mode=ParseMode.MARKDOWN_V2,
+        parse_mode=ParseMode.HTML,
         reply_markup=main_menu(),
         disable_web_page_preview=True,
     )
@@ -349,7 +311,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
 async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     await update.message.reply_text(
         guide_text(),
-        parse_mode=ParseMode.MARKDOWN_V2,
+        parse_mode=ParseMode.HTML,
         reply_markup=guide_keyboard(),
         disable_web_page_preview=True,
     )
@@ -360,12 +322,12 @@ async def reset_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
     await update.message.reply_text(
         "\n".join(
             [
-                format_header(f"{E_BROOM} Memory Reset", "This chat history is now clean."),
+                format_header("Memory Flush Complete", "Context memory fields cleared clean."),
                 "",
-                escape_md("Send a fresh question whenever you are ready."),
+                "The system is primed for fresh processing parameters.",
             ]
         ),
-        parse_mode=ParseMode.MARKDOWN_V2,
+        parse_mode=ParseMode.HTML,
         reply_markup=main_menu(),
     )
 
@@ -374,7 +336,7 @@ async def show_settings(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
     user = db.get_user(update.effective_chat.id)
     await update.message.reply_text(
         settings_text(user),
-        parse_mode=ParseMode.MARKDOWN_V2,
+        parse_mode=ParseMode.HTML,
         reply_markup=settings_keyboard(user),
         disable_web_page_preview=True,
     )
@@ -383,7 +345,7 @@ async def show_settings(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
 async def show_guide(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     await update.message.reply_text(
         guide_text(),
-        parse_mode=ParseMode.MARKDOWN_V2,
+        parse_mode=ParseMode.HTML,
         reply_markup=guide_keyboard(),
         disable_web_page_preview=True,
     )
@@ -393,9 +355,9 @@ async def show_tokens(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
     user = db.get_user(update.effective_chat.id)
     await update.message.reply_text(
         token_status_text(user),
-        parse_mode=ParseMode.MARKDOWN_V2,
+        parse_mode=ParseMode.HTML,
         reply_markup=InlineKeyboardMarkup(
-            [[InlineKeyboardButton(f"{E_GEAR} Open Settings", callback_data="open:settings")]]
+            [[InlineKeyboardButton("Open Settings", callback_data="open:settings")]]
         ),
     )
 
@@ -435,9 +397,9 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
         db.clear_history(chat_id)
         text = "\n".join(
             [
-                format_header(f"{E_BROOM} Memory Reset", "Conversation memory has been cleared."),
+                format_header("Context Memory Reset", "Conversation tracking elements cleared."),
                 "",
-                escape_md("Your settings stayed exactly the same."),
+                "System architecture metrics remain unchanged.",
             ]
         )
         keyboard = settings_keyboard(user)
@@ -447,15 +409,15 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
     elif data == "open:tokens":
         text = token_status_text(user)
         keyboard = InlineKeyboardMarkup(
-            [[InlineKeyboardButton(f"{E_GEAR} Open Settings", callback_data="open:settings")]]
+            [[InlineKeyboardButton("Open Settings", callback_data="open:settings")]]
         )
     else:
-        text = escape_md("Unknown action.")
+        text = "Unknown transaction protocol handling error."
         keyboard = None
 
     await query.edit_message_text(
         text,
-        parse_mode=ParseMode.MARKDOWN_V2,
+        parse_mode=ParseMode.HTML,
         reply_markup=keyboard,
         disable_web_page_preview=True,
     )
@@ -469,7 +431,7 @@ async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
     if text == MENU_ASK:
         await update.message.reply_text(
             prompt_for_question_text(user),
-            parse_mode=ParseMode.MARKDOWN_V2,
+            parse_mode=ParseMode.HTML,
             reply_markup=main_menu(),
         )
         return
@@ -488,10 +450,10 @@ async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
 
     await context.bot.send_chat_action(chat_id=chat_id, action=ChatAction.TYPING)
     placeholder = await update.message.reply_text(
-        f"{E_SPARK} *Thinking\\.\\.\\.*\n"
-        f"{escape_md(DIVIDER)}\n"
-        f"{E_SEARCH} *Analyzing your request\\.\\.\\.*",
-        parse_mode=ParseMode.MARKDOWN_V2,
+        f"<b>Processing Query...</b>\n"
+        f"{DIVIDER}\n"
+        f"<i>Analyzing transaction instructions...</i>",
+        parse_mode=ParseMode.HTML,
     )
 
     try:
@@ -503,9 +465,9 @@ async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
             placeholder,
             "\n".join(
                 [
-                    format_header(f"{E_TOOLS} Something Went Wrong", "Gemini could not answer this request."),
+                    format_header("Processing Interrupted", "Core framework could not execute statement."),
                     "",
-                    escape_md("Please check your API key, model name, and Render logs, then try again."),
+                    "Review environmental API tokens, configuration parameters, and cluster logging streams.",
                 ]
             ),
         )
@@ -521,7 +483,6 @@ def register_handlers() -> None:
     telegram_app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_text))
 
 
-# Automatically build handlers into our initialization flow
 register_handlers()
 
 
