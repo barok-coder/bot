@@ -5,12 +5,12 @@ import uvicorn
 from fastapi import FastAPI, Header, HTTPException, Request
 from telegram import Update
 
-try:
+if __package__:
     from .config import settings
-    from .handlers import telegram_app
-except ImportError:
+    from . import handlers
+else:
     from config import settings
-    from handlers import telegram_app
+    import handlers
 
 
 logging.basicConfig(
