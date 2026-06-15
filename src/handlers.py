@@ -147,11 +147,47 @@ def welcome_text(first_name: str | None) -> str:
 
 
 def settings_text(user: UserSettings) -> str:
+    concise_flag = "Enabled" if user.concise_mode else "Disabled"
+    rich_flag = "Enabled" if user.rich_ui else "Disabled"
+    
     return "\n".join(
         [
             format_header("System Settings", "Configure engine behavioral traits."),
             "",
             f"<b>Engine Model:</b> <code>{settings.gemini_model}</code>",
             f"<b>Temperature:</b> <code>{user.temperature}</code> ({user.temperature_label})",
-            f"<b>Concise Mode:</b> <code>{'Enabled' if user.concise_mode else 'Disabled'}</code>",
-            f"<b>Rich UI Elements:</b> <code>{'Enabled
+            f"<b>Concise Mode:</b> <code>{concise_flag}</code>",
+            f"<b>Rich UI Elements:</b> <code>{rich_flag}</code>",
+            "",
+            "Select an interface option below to update configurations.",
+        ]
+    )
+
+
+def guide_text() -> str:
+    return "\n".join(
+        [
+            format_header("Operational Guide", "System control panel documentation."),
+            "",
+            "<b>Ask Gemini AI</b>",
+            "Processes code inquiries, explanations, study modules, or text generation tasks.",
+            "",
+            "<b>Multimodal Inputs</b>",
+            "Send an image or attach a file directly. You can add a caption with your question alongside the attachment.",
+            "",
+            "<b>Bot Settings</b>",
+            "Adjust system creativity indexes: Creative (0.95), Balanced (0.7), or Precise (0.25).",
+            "",
+            "<b>Token Status</b>",
+            "Evaluates structural payload usage for the active runtime instance environment.",
+        ]
+    )
+
+
+def token_status_text(user: UserSettings) -> str:
+    return "\n".join(
+        [
+            format_header("Token Payload Diagnostics", "Live runtime performance parameters."),
+            "",
+            f"<b>Prompt Metrics:</b> <code>{user.prompt_tokens}</code>",
+            f"<b>Response Metrics:</b> <code>{
