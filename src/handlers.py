@@ -31,6 +31,7 @@ logger = logging.getLogger("telegram_gemini_bot.handlers")
 
 settings.validate()
 
+# --- Initialize variables globally and immediately so they are available to lifespan imports ---
 telegram_app = Application.builder().token(settings.bot_token).build()
 gemini_client = genai.Client(api_key=settings.gemini_api_key)
 
@@ -163,11 +164,6 @@ def format_header(title: str, subtitle: str | None = None) -> str:
     if subtitle:
         lines.append(escape_md(subtitle))
     return "\n".join(lines)
-def format_header(title: str, subtitle: str | None = None) -> str:
-    lines = [f"*{escape_md(title)}*", escape_md(DIVIDER)]
-    if subtitle:
-        lines.append(escape_md(subtitle))
-    return "\n".join(lines)
 
 
 def welcome_text(first_name: str | None) -> str:
@@ -221,6 +217,7 @@ def guide_text() -> str:
             code_block("Explain this like I am new to it: async webhooks in Telegram bots"),
         ]
     )
+
 
 def token_status_text(user: UserSettings) -> str:
     return "\n".join(
@@ -302,105 +299,6 @@ async def ask_gemini(chat_id: int, user_text: str) -> str:
         update_token_usage(chat_id, usage_metadata)
 
     db.add_exchange(chat_id, user_text, answer)
-    return answer
-
-def format_ai_response(answer: str, user: UserSettings) -> str:
-    if not user.rich_ui:
-        return escape_md(answer)
-
-    return "\n".join(
-        [
-            f"*{E_BRAIN} Gemini Response*",
-            escape_md(DIVIDER),
-            escape_md(answer),
-            "",
-            escape_md(DIVIDER),
-            f"{E_GEAR} *Mode:* {inline_code(user.temperature_label)}  {E_BULLET}  "
-            f"{E_SPARK} *Tokens:* {inline_code(user.total_tokens)}",
-        ]
-    )
-
-
-async def safe_edit_text(message, text: str, reply_markup=None) -> None:
-    chunks = split_message(text)
-    await message.edit_text(
-        chunks[0],
-        parse_mode=ParseMode.MARKDOWN_V2,
-        reply_markup=reply_markup,
-        disable_web_page_preview=True,
-    )
-
-    for chunk in chunks[1:]:
-        await message.reply_text(
-            chunk,
-            parse_mode=ParseMode.MARKDOWN_V2,
-            disable_web_page_preview=True,
-        )
-
-
-async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    first_name = update.effective_user.first_name if update.effective_user else None
-    await update.message.reply_text(
-        welcome_text(first_name),
-        parse_mode=ParseMode.MARKDOWN_V2,
-        reply_markup=main_menu(),
-        disable_web_page_preview=True,
-    )
-
-
-async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    await update.message.reply_text(
-        guide_text(),
-        parse_mode=ParseMode.MARKDOWN_V2,
-        reply_markup=guide_keyboard(),
-        disable_web_page_preview=True,
-    )
-
-
-async def reset_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    db.clear_history(update.effective_chat.id)
-    await update.message.reply_text(
-        "\n".join(
-            [
-                format_header(f"{E_BROOM} Memory Reset", "This chat history is now clean."),
-                "",
-                escape_md("Send a fresh question whenever you are ready."),
-            ]
-        ),
-        parse_mode=ParseMode.MARKDOWN_V2,
-        reply_markup=main_menu(),
-    )
-
-
-async def show_settings(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    user = db.get_user(update.effective_chat.id)
-    await update.message.reply_text(
-        settings_text(user),
-        parse_mode=ParseMode.MARKDOWN_V2,
-        reply_markup=settings_keyboard(user),
-        disable_web_page_preview=True,
-    )
-
-
-async def show_guide(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    await update.message.reply_text(
-        guide_text(),
-        parse_mode=ParseMode.MARKDOWN_V2,
-        reply_markup=guide_keyboard(),
-        disable_web_page_preview=True,
-    )
-
-
-async def show_tokens(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    user = db.get_user(update.effective_chat.id)
-    await update.message.reply_text(
-        token_status_text(user),
-        parse_mode=ParseMode.MARKDOWN_V2,
-        reply_markup=InlineKeyboardMarkup(
-            [[InlineKeyboardButton(f"{E_GEAR} Open Settings", callback_data="open:settings")]]
-        ),
-    )
-
     return answer
 
 
@@ -615,9 +513,7 @@ async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
 
 def register_handlers() -> None:
     global telegram_app
-    if "telegram_app" not in globals():
-        telegram_app = Application.builder().token(settings.bot_token).build()
-
+    
     telegram_app.add_handler(CommandHandler("start", start))
     telegram_app.add_handler(CommandHandler("help", help_command))
     telegram_app.add_handler(CommandHandler("reset", reset_command))
@@ -625,6 +521,7 @@ def register_handlers() -> None:
     telegram_app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_text))
 
 
+# Automatically build handlers into our initialization flow
 register_handlers()
 
 
