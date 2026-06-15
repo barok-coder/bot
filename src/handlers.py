@@ -1,58 +1,100 @@
-# src/handlers.py
-from telegram import Update
-from telegram.ext import ContextTypes
+import logging
+import re
+
 from google import genai
 from google.genai import types
-from src.config import GEMINI_API_KEY, logger
-from src.database import add_user
-
-# Initialize the Gemini client
-client = genai.Client(api_key=GEMINI_API_KEY)
-
-SYSTEM_INSTRUCTION = (
-    "You are a helpful AI assistant. "
-    "Keep responses structured using clear headings and bullet points. "
-    "Avoid using characters that break Markdown like unclosed brackets."
+from telegram import (
+    InlineKeyboardButton,
+    InlineKeyboardMarkup,
+    ReplyKeyboardMarkup,
+    Update,
+)
+from telegram.constants import ChatAction, ParseMode
+from telegram.ext import (
+    Application,
+    CallbackQueryHandler,
+    CommandHandler,
+    ContextTypes,
+    MessageHandler,
+    filters,
 )
 
-async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    add_user(update.effective_user.id)
-    await update.message.reply_text("💠 *Hybrid Assistant Online*")
+from .config import settings
+from .database import UserSettings, db
 
-async def reset_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text("🔄 *Memory reset.*")
 
-async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    if not update.message or not update.message.text:
-        return
-    
-    await context.bot.send_chat_action(chat_id=update.effective_chat.id, action="typing")
-    
-    try:
-        # Generate content from Gemini
-        response = client.models.generate_content(
-            model="gemini-2.5-flash", 
-            contents=update.message.text,
-            config=types.GenerateContentConfig(system_instruction=SYSTEM_INSTRUCTION)
-        )
-        
-        # Simple text sanitization to prevent parsing errors
-        # We replace Markdown-breaking characters with safe versions
-        raw_text = response.text
-        clean_text = raw_text.replace('[', '(').replace(']', ')')
-        
-        ui_card = (
-            f"💠 *Gemini Assistant*\n"
-            f"━━━━━━━━━━━━━━━━━━\n\n"
-            f"{clean_text}\n\n"
-            f"━━━━━━━━━━━━━━━━━━\n"
-            f"✨ _Status: Active_"
-        )
-        
-        # We use parse_mode="Markdown" (version 1) 
-        # It is much more forgiving than MarkdownV2
-        await update.message.reply_text(ui_card, parse_mode="Markdown")
-        
-    except Exception as e:
-        logger.error(f"Handler Error: {e}")
-        await update.message.reply_text("⚠️ *System Error: Could not process request.*")
+logger = logging.getLogger("telegram_gemini_bot.handlers")
+
+settings.validate()
+
+telegram_app = Application.builder().token(settings.bot_token).build()
+gemini_client = genai.Client(api_key=settings.gemini_api_key)
+
+MENU_ASK = "🧠 Ask Gemini AI"
+MENU_SETTINGS = "⚙️ Bot Settings"
+MENU_GUIDE = "📜 Feature Guide"
+MENU_TOKENS = "📊 Token Status"
+DIVIDER = "───────────────"
+
+
+def escape_md(text: object) -> str:
+    raw = "" if text is None else str(text)
+    return re.sub(r"([_*\[\]()~`>#+\-=|{}.!\\])", r"\\\1", raw)
+
+
+def inline_code(text: object) -> str:
+    raw = "" if text is None else str(text)
+    safe = raw.replace("\\", "\\\\").replace("`", "\\`")
+    return f"`{safe}`"
+
+
+def code_block(text: object) -> str:
+    raw = "" if text is None else str(text)
+    safe = raw.replace("\\", "\\\\").replace("`", "\\`")
+    return f"```text\n{safe}\n```"
+
+
+def split_message(text: str, limit: int = 3900) -> list[str]:
+    if len(text) <= limit:
+        return [text]
+
+    chunks = []
+    current = []
+    current_length = 0
+
+    for line in text.splitlines(keepends=True):
+        if current and current_length + len(line) > limit:
+            chunks.append("".join(current))
+            current = []
+            current_length = 0
+        current.append(line)
+        current_length += len(line)
+
+    if current:
+        chunks.append("".join(current))
+
+    return chunks
+
+
+def main_menu() -> ReplyKeyboardMarkup:
+    return ReplyKeyboardMarkup(
+        [
+            [MENU_ASK],
+            [MENU_SETTINGS, MENU_GUIDE],
+            [MENU_TOKENS],
+        ],
+        resize_keyboard=True,
+        is_persistent=True,
+        input_field_placeholder="Ask Gemini anything...",
+    )
+
+
+def settings_keyboard(user: UserSettings) -> InlineKeyboardMarkup:
+    concise_status = "✅ Concise" if user.concise_mode else "⬜ Concise"
+    rich_status = "✅ Rich UI" if user.rich_ui else "⬜ Rich UI"
+
+    return InlineKeyboardMarkup(
+        [
+            [
+                InlineKeyboardButton("🔥 Creative", callback_data="temp:creative"),
+                InlineKeyboardButton("⚖️ Balanced", callback_data="temp:balanced"),
