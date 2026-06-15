@@ -1,3 +1,8 @@
+        parse_mode=ParseMode.MARKDOWN_V2,
+        reply_markup=guide_keyboard(),
+        disable_web_page_preview=True,
+    )
+
 
 async def reset_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     db.clear_history(update.effective_chat.id)
@@ -156,14 +161,6 @@ async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
 
 
 def register_handlers() -> None:
-    telegram_app.add_handler(CommandHandler("start", start))
-    telegram_app.add_handler(CommandHandler("help", help_command))
-    telegram_app.add_handler(CommandHandler("reset", reset_command))
-    telegram_app.add_handler(CallbackQueryHandler(handle_callback))
-    telegram_app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_text))
-
-
-def register_handlers() -> None:
     global telegram_app
     if "telegram_app" not in globals():
         telegram_app = Application.builder().token(settings.bot_token).build()
@@ -173,3 +170,10 @@ def register_handlers() -> None:
     telegram_app.add_handler(CommandHandler("reset", reset_command))
     telegram_app.add_handler(CallbackQueryHandler(handle_callback))
     telegram_app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_text))
+
+
+register_handlers()
+
+
+def get_telegram_app() -> Application:
+    return telegram_app
