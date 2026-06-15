@@ -1,73 +1,38 @@
-import os
 import logging
-from contextlib import asynccontextmanager
-from fastapi import FastAPI, Request, Response, status
-from telegram import Update
+import asyncio
+import sys
+from telegram.ext import Application
 
-from src.handlers import telegram_app, settings
+from src.handlers import telegram_app, register_handlers
 
-# Set up clean logging visibility
+# Configure clear logging output directly into Render's console panel
+logging.basicConfig(
+    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s", 
+    level=logging.INFO
+)
 logger = logging.getLogger("telegram_gemini_bot.main")
 
-@asynccontextmanager
-async def lifespan(app: FastAPI):
+def main():
     """
-    Manages the application lifecycle. Uses python-telegram-bot's
-    async context manager to properly power the internal handler execution engine.
-    """
-    render_url = os.environ.get("RENDER_EXTERNAL_URL")
-    if not render_url:
-        logger.error("CRITICAL: RENDER_EXTERNAL_URL environment variable is missing!")
-        render_url = "https://gemini-telegram-bot-3ekp.onrender.com"
-        
-    webhook_target = f"{render_url.rstrip('/')}/telegram-webhook"
-    logger.info(f"Connecting webhook endpoint at: {webhook_target}")
-
-    # Set up the webhook mapping directly on Telegram's core servers
-    await telegram_app.bot.set_webhook(
-        url=webhook_target, 
-        allowed_updates=Update.ALL_TYPES, 
-        drop_pending_updates=True
-    )
-    
-    # OFFICIAL PTB PATTERN: Initialize, start, and run inside the async context manager block
-    async with telegram_app:
-        await telegram_app.start()
-        logger.info("Telegram Bot Webhook Application Runtime Engine Fully Online.")
-        yield
-        await telegram_app.stop()
-
-
-# Initialize the primary FastAPI routing server instance
-app = FastAPI(lifespan=lifespan)
-
-
-@app.post("/telegram-webhook")
-async def handle_telegram_updates(request: Request):
-    """
-    Listens directly to incoming POST update matrices from Telegram servers.
-    Safely feeds the objects into the shared context execution engine.
+    Main execution pipeline running as a continuous background worker.
+    Bypasses port binding rules and connects directly using long polling.
     """
     try:
-        payload = await request.json()
+        logger.info("Initializing background worker engine...")
         
-        # Coerce the incoming dictionary payload block into a structured Update object
-        update = Update.de_json(data=payload, bot=telegram_app.bot)
+        # 1. Force clear any lingering webhook channels on Telegram's core servers
+        logger.info("Flushing legacy webhook routes from cloud instances...")
+        asyncio.run(telegram_app.bot.delete_webhook(drop_pending_updates=True))
         
-        # This processes instantly since the "async with telegram_app" context is active
-        await telegram_app.process_update(update)
+        # 2. Run the native long polling execution loop block
+        logger.info("Ecosystem initialized successfully. Polling channel is now LIVE 🎉")
+        
+        # This blocks execution and maintains an open connection channel permanently
+        telegram_app.run_polling(close_loop=False)
         
     except Exception as err:
-        logger.error(f"Error executing incoming update context matrix: {err}")
-        
-    # Always send a 200 OK block back immediately so Telegram knows the receipt is secured
-    return Response(status_code=status.HTTP_200_OK)
+        logger.critical(f"Fatal crash inside background process runtime loop: {err}")
+        sys.exit(1)
 
-
-@app.get("/")
-@app.get("/healthz")
-async def server_health_check():
-    """
-    Keeps Render's automated platform architecture monitoring systems green.
-    """
-    return {"status": "operational", "engine": "FastAPI + Gemini Bot Engine"}
+if __name__ == "__main__":
+    main()
