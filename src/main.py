@@ -1,6 +1,5 @@
 import os
 import logging
-import asyncio
 from contextlib import asynccontextmanager
 from fastapi import FastAPI, Request, Response, status
 from telegram import Update
@@ -12,8 +11,8 @@ logger = logging.getLogger("telegram_gemini_bot.main")
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """
-    Manages the web application lifecycle. Initializes concurrent workers,
-    establishes secure webhook targets, and triggers clean runtime teardowns.
+    Manages the application lifecycle. Explicitly initializes the PTB engine
+    and tells Telegram where to route live webhook traffic.
     """
     render_url = os.environ.get("RENDER_EXTERNAL_URL")
     if not render_url:
@@ -21,33 +20,27 @@ async def lifespan(app: FastAPI):
         render_url = "https://gemini-telegram-bot-3ekp.onrender.com"
         
     webhook_target = f"{render_url.rstrip('/')}/telegram-webhook"
-    logger.info(f"Establishing primary connection route at: {webhook_target}")
+    logger.info(f"Connecting webhook endpoint at: {webhook_target}")
 
-    # 1. Initialize components inside the running ASGI event loop
+    # Initialize the basic internal bot engine
     await telegram_app.initialize()
     
-    # 2. Establish the webhook directly on Telegram's servers
+    # Secure the webhook mapping on Telegram's servers
     await telegram_app.bot.set_webhook(url=webhook_target, drop_pending_updates=True)
     
-    # 3. Start the core application engine infrastructure
+    # Spin up the application framework context
     await telegram_app.start()
     
-    # 4. DEFINITIVE WORKER FIX: Spin up the internal concurrent execution pool tasks
-    # This instructs python-telegram-bot to start processing updates pushed to the queue!
-    await telegram_app.updater.start_polling() if telegram_app.updater else None
-    # If using standard custom build queue architecture:
-    asyncio.create_task(telegram_app.start_execution_pool()) if hasattr(telegram_app, 'start_execution_pool') else None
-
-    logger.info("Bot execution pool initialized. Background tasks active.")
+    logger.info("Telegram Bot Webhook Context Fully Online.")
     yield
     
-    # Tear down pipelines gracefully on container cycling signals
-    logger.info("Disconnecting webhook channels and shutting down task threads...")
+    # Graceful teardown when container scales or cycles
+    logger.info("Tearing down webhook structures...")
     await telegram_app.stop()
     await telegram_app.shutdown()
 
 
-# Initialize the primary FastAPI routing instance
+# Spin up the FastAPI server profile
 app = FastAPI(lifespan=lifespan)
 
 
@@ -55,20 +48,22 @@ app = FastAPI(lifespan=lifespan)
 async def handle_telegram_updates(request: Request):
     """
     Listens directly to incoming POST update matrices from Telegram servers.
+    Forces direct synchronous execution without utilizing background concurrent queues.
     """
     try:
         payload = await request.json()
         
-        # Coerce raw dictionary blocks into a structured Update profile
+        # Coerce the incoming JSON string block into an official structured Update model
         update = Update.de_json(data=payload, bot=telegram_app.bot)
         
-        # Safely deposit the object into the background task execution queue
-        await telegram_app.update_queue.put(update)
+        # DEFINITIVE NATIVE FIX: Force direct update execution immediately!
+        # This completely skips the background update_queue worker bottleneck.
+        await telegram_app.process_update(update)
         
     except Exception as err:
-        logger.error(f"Error handling incoming update payload matrix: {err}")
+        logger.error(f"Error executing incoming update context matrix: {err}")
         
-    # Always send a 200 OK block back immediately so Telegram knows the receipt is secured
+    # Always send a 200 OK block back immediately so Telegram knows the block arrived safely
     return Response(status_code=status.HTTP_200_OK)
 
 
@@ -76,6 +71,6 @@ async def handle_telegram_updates(request: Request):
 @app.get("/healthz")
 async def server_health_check():
     """
-    Keeps Render's automated platform monitoring systems green.
+    Keeps Render's automated architecture health monitors green.
     """
-    return {"status": "operational", "engine": "FastAPI + Gemini Bot Core"}
+    return {"status": "operational", "engine": "FastAPI + Gemini Bot Engine"}
