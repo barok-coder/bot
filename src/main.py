@@ -1,10 +1,4 @@
-import logging
-from contextlib import asynccontextmanager
-from fastapi import FastAPI, Request, Response
-from telegram import Update
-from src.handlers import telegram_app, settings  # ensure settings is imported
-
-logger = logging.getLogger(__name__)
+import os  # Make sure to import os at the top of your file
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -12,9 +6,15 @@ async def lifespan(app: FastAPI):
     await telegram_app.initialize()
     await telegram_app.start()
     
-    # 2. Set the Webhook URL so Telegram knows where to send updates
-    # Ensure your RENDER_EXTERNAL_URL environment variable is set in the Render dashboard
-    webhook_url = f"{settings.render_url}/webhook" 
+    # 2. Pull the URL directly from Render's environment variables
+    render_external_url = os.environ.get("RENDER_EXTERNAL_URL")
+    
+    if not render_external_url:
+        logger.error("RENDER_EXTERNAL_URL environment variable is missing!")
+        # Fallback just in case you named it something else manually
+        render_external_url = getattr(settings, "webhook_url", "https://your-bot-fallback.onrender.com")
+
+    webhook_url = f"{render_external_url}/webhook" 
     logger.info(f"Setting webhook to: {webhook_url}")
     
     await telegram_app.bot.set_webhook(url=webhook_url)
@@ -25,20 +25,3 @@ async def lifespan(app: FastAPI):
     await telegram_app.bot.delete_webhook()
     await telegram_app.stop()
     await telegram_app.shutdown()
-
-app = FastAPI(lifespan=lifespan)
-
-# 4. THIS ROUTE RECEIVES THE MESSAGES FROM TELEGRAM
-@app.post("/webhook")
-async def webhook_handler(request: Request):
-    try:
-        data = await request.json()
-        update = Update.de_json(data, telegram_app.bot)
-        await telegram_app.process_update(update)
-    except Exception as e:
-        logger.error(f"Error processing update: {e}")
-    return Response(status_code=200)
-
-@app.get("/")
-async def root():
-    return {"status": "healthy"}
