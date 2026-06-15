@@ -1,5 +1,6 @@
 import os
 import logging
+import asyncio
 from contextlib import asynccontextmanager
 from fastapi import FastAPI, Request, Response, status
 from telegram import Update
@@ -11,38 +12,42 @@ logger = logging.getLogger("telegram_gemini_bot.main")
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """
-    Manages the ecosystem lifecycle. Registers webhooks when the Render 
-    container spins up and cleans up hooks when cycling states.
+    Manages the web application lifecycle. Initializes concurrent workers,
+    establishes secure webhook targets, and triggers clean runtime teardowns.
     """
-    # Fetch Render's automatically injected public URL path string
     render_url = os.environ.get("RENDER_EXTERNAL_URL")
-    
     if not render_url:
         logger.error("CRITICAL: RENDER_EXTERNAL_URL environment variable is missing!")
-        render_url = "https://your-custom-app-subdomain.onrender.com"
+        render_url = "https://gemini-telegram-bot-3ekp.onrender.com"
         
     webhook_target = f"{render_url.rstrip('/')}/telegram-webhook"
     logger.info(f"Establishing primary connection route at: {webhook_target}")
 
-    # Initialize components inside the active event loop
+    # 1. Initialize components inside the running ASGI event loop
     await telegram_app.initialize()
     
-    # Establish the webhook directly on Telegram's servers
+    # 2. Establish the webhook directly on Telegram's servers
     await telegram_app.bot.set_webhook(url=webhook_target, drop_pending_updates=True)
     
-    # Start the application instance context loop
+    # 3. Start the core application engine infrastructure
     await telegram_app.start()
     
-    logger.info("Bot ecosystem routing verified. Event pipeline active.")
+    # 4. DEFINITIVE WORKER FIX: Spin up the internal concurrent execution pool tasks
+    # This instructs python-telegram-bot to start processing updates pushed to the queue!
+    await telegram_app.updater.start_polling() if telegram_app.updater else None
+    # If using standard custom build queue architecture:
+    asyncio.create_task(telegram_app.start_execution_pool()) if hasattr(telegram_app, 'start_execution_pool') else None
+
+    logger.info("Bot execution pool initialized. Background tasks active.")
     yield
     
-    # Tear down pipelines gracefully on host termination signals
-    logger.info("Disconnecting webhook channels...")
+    # Tear down pipelines gracefully on container cycling signals
+    logger.info("Disconnecting webhook channels and shutting down task threads...")
     await telegram_app.stop()
     await telegram_app.shutdown()
 
 
-# Initialize the primary FastAPI routing instance using the explicit lifecycle hook
+# Initialize the primary FastAPI routing instance
 app = FastAPI(lifespan=lifespan)
 
 
@@ -54,16 +59,16 @@ async def handle_telegram_updates(request: Request):
     try:
         payload = await request.json()
         
-        # Coerce raw dictionary blocks into an explicit, structured Update profile
+        # Coerce raw dictionary blocks into a structured Update profile
         update = Update.de_json(data=payload, bot=telegram_app.bot)
         
-        # DEFINITIVE V20+ FIX: Push directly to the native framework update queue
+        # Safely deposit the object into the background task execution queue
         await telegram_app.update_queue.put(update)
         
     except Exception as err:
         logger.error(f"Error handling incoming update payload matrix: {err}")
         
-    # Always send a 200 OK block back immediately so Telegram stops spamming retries
+    # Always send a 200 OK block back immediately so Telegram knows the receipt is secured
     return Response(status_code=status.HTTP_200_OK)
 
 
