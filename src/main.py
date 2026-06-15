@@ -1,6 +1,8 @@
+import os
 import logging
-import asyncio
-import sys
+from contextlib import asynccontextmanager
+from fastapi import FastAPI, Request, Response, status
+from telegram import Update
 
 from src.handlers import telegram_app
 
@@ -11,30 +13,66 @@ logging.basicConfig(
 )
 logger = logging.getLogger("telegram_gemini_bot.main")
 
-def main():
+@asynccontextmanager
+async def lifespan(app: FastAPI):
     """
-    Main execution pipeline running as a continuous background worker.
-    Bypasses port binding rules and connects directly using long polling.
+    Manages the application lifecycle. Sets up the live webhook route 
+    mapping target on Telegram's core servers during startup.
+    """
+    render_url = os.environ.get("RENDER_EXTERNAL_URL")
+    if not render_url:
+        logger.error("CRITICAL: RENDER_EXTERNAL_URL environment variable is missing!")
+        render_url = "https://gemini-telegram-bot-3ekp.onrender.com"
+        
+    webhook_target = f"{render_url.rstrip('/')}/telegram-webhook"
+    logger.info(f"Connecting webhook endpoint at: {webhook_target}")
+
+    # Explicitly clear out old states and link the webhook
+    await telegram_app.bot.initialize()
+    await telegram_app.bot.set_webhook(
+        url=webhook_target, 
+        allowed_updates=Update.ALL_TYPES, 
+        drop_pending_updates=True
+    )
+    
+    logger.info("Web service interface hook verified. Standing by for incoming payload updates...")
+    yield
+    
+    # Graceful teardown when container scales or cycles
+    logger.info("Tearing down web service channels...")
+    await telegram_app.bot.shutdown()
+
+
+# Spin up the primary FastAPI entry point object instance
+app = FastAPI(lifespan=lifespan)
+
+
+@app.post("/telegram-webhook")
+async def handle_telegram_updates(request: Request):
+    """
+    Listens directly to incoming POST update matrices from Telegram servers.
+    Forces direct runtime context mapping to eliminate worker deadlocks.
     """
     try:
-        logger.info("Initializing background worker engine...")
+        payload = await request.json()
+        update = Update.de_json(data=payload, bot=telegram_app.bot)
         
-        # 1. Clear out any lingering webhook channels on Telegram's servers
-        logger.info("Flushing legacy webhook routes from cloud instances...")
-        
-        loop = asyncio.new_event_loop()
-        asyncio.set_event_loop(loop)
-        loop.run_until_complete(telegram_app.bot.delete_webhook(drop_pending_updates=True))
-        
-        # 2. Run the native long polling execution loop block
-        logger.info("Ecosystem initialized successfully. Polling channel is now LIVE 🎉")
-        
-        # This keeps the background process alive and listening continuously
-        telegram_app.run_polling(drop_pending_updates=True)
-        
+        # DEFINITIVE FIX: Open a localized async context state block
+        # This forces the underlying aiohttp network pipes open for this request
+        async with telegram_app:
+            await telegram_app.process_update(update)
+            
     except Exception as err:
-        logger.critical(f"Fatal crash inside background process runtime loop: {err}")
-        sys.exit(1)
+        logger.error(f"Error executing incoming update context matrix: {err}")
+        
+    # Always send a 200 OK block back immediately so Telegram stops spamming retries
+    return Response(status_code=status.HTTP_200_OK)
 
-if __name__ == "__main__":
-    main()
+
+@app.get("/")
+@app.get("/healthz")
+async def server_health_check():
+    """
+    Keeps Render's automated architecture health monitors green.
+    """
+    return {"status": "operational", "engine": "FastAPI + Gemini Webhook Engine"}
