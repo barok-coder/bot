@@ -1,17 +1,19 @@
-import os  # Make sure to import os at the top of your file
+import os
+import logging
+from contextlib import asynccontextmanager  # <--- ADD THIS LINE HERE
+from fastapi import FastAPI, Request, Response
+from telegram import Update
+from src.handlers import telegram_app, settings
+
+logger = logging.getLogger(__name__)
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # 1. Initialize and start the application locally
     await telegram_app.initialize()
     await telegram_app.start()
     
-    # 2. Pull the URL directly from Render's environment variables
     render_external_url = os.environ.get("RENDER_EXTERNAL_URL")
-    
     if not render_external_url:
-        logger.error("RENDER_EXTERNAL_URL environment variable is missing!")
-        # Fallback just in case you named it something else manually
         render_external_url = getattr(settings, "webhook_url", "https://your-bot-fallback.onrender.com")
 
     webhook_url = f"{render_external_url}/webhook" 
@@ -21,7 +23,22 @@ async def lifespan(app: FastAPI):
     
     yield
     
-    # 3. Clean up on shutdown
     await telegram_app.bot.delete_webhook()
     await telegram_app.stop()
     await telegram_app.shutdown()
+
+app = FastAPI(lifespan=lifespan)
+
+@app.post("/webhook")
+async def webhook_handler(request: Request):
+    try:
+        data = await request.json()
+        update = Update.de_json(data, telegram_app.bot)
+        await telegram_app.process_update(update)
+    except Exception as e:
+        logger.error(f"Error processing update: {e}")
+    return Response(status_code=200)
+
+@app.get("/")
+async def root():
+    return {"status": "healthy"}
