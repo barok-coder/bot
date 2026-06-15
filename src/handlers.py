@@ -132,14 +132,9 @@ def welcome_text(first_name: str | None) -> str:
     name = first_name or "User"
     return "\n".join(
         [
-            format_header("Gemini AI Core", f"Welcome, {name}."),
+            format_header("Welcome to MIntu's AI", f"Welcome, {name}."),
             "",
-            "A clean, cloud-hosted assistant powered by Google Gemini AI.",
-            "",
-            "• Submit complex questions or prompts",
-            "• Tune response engines via settings",
-            "• Explore documentation guides",
-            "• Track session token metadata profiles",
+            " Start chatting with Instant ",
             "",
             "Interact with the terminal menu below to begin.",
         ]
