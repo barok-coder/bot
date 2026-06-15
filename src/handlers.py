@@ -1,5 +1,6 @@
 import logging
 import re
+import html
 
 from google import genai
 from google.genai import types
@@ -9,7 +10,7 @@ from telegram import (
     ReplyKeyboardMarkup,
     Update,
 )
-from telegram.constants import ChatAction, ParseMode
+from telegram.constants import ChatAction
 from telegram.ext import (
     Application,
     CallbackQueryHandler,
@@ -242,13 +243,12 @@ def update_token_usage(chat_id: int, usage_metadata: object) -> None:
 async def ask_gemini(chat_id: int, user_text: str) -> str:
     user = db.get_user(chat_id)
     
-    # WE SET max_output_tokens=1000 HERE DIRECTLY
     response = await gemini_client.aio.models.generate_content(
         model=settings.gemini_model,
         contents=build_prompt(chat_id, user_text),
         config=types.GenerateContentConfig(
             temperature=user.temperature,
-            max_output_tokens=10000,
+            max_output_tokens=1000,
         ),
     )
 
@@ -283,26 +283,37 @@ def format_ai_response(answer: str, user: UserSettings) -> str:
 
 async def safe_edit_text(message, text: str, reply_markup=None) -> None:
     chunks = split_message(text)
-    await message.edit_text(
-        chunks[0],
-        parse_mode=ParseMode.HTML,
-        reply_markup=reply_markup,
-        disable_web_page_preview=True,
-    )
-
-    for chunk in chunks[1:]:
-        await message.reply_text(
-            chunk,
-            parse_mode=ParseMode.HTML,
+    try:
+        await message.edit_text(
+            chunks[0],
+            parse_mode="HTML",
+            reply_markup=reply_markup,
             disable_web_page_preview=True,
         )
+    except Exception:
+        # Secure fallback if Gemini generates raw unclosed syntax characters like < or >
+        await message.edit_text(
+            html.escape(chunks[0]),
+            parse_mode=None,
+            reply_markup=reply_markup,
+        )
+
+    for chunk in chunks[1:]:
+        try:
+            await message.reply_text(
+                chunk,
+                parse_mode="HTML",
+                disable_web_page_preview=True,
+            )
+        except Exception:
+            await message.reply_text(html.escape(chunk), parse_mode=None)
 
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     first_name = update.effective_user.first_name if update.effective_user else None
     await update.message.reply_text(
         welcome_text(first_name),
-        parse_mode=ParseMode.HTML,
+        parse_mode="HTML",
         reply_markup=main_menu(),
         disable_web_page_preview=True,
     )
@@ -311,7 +322,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
 async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     await update.message.reply_text(
         guide_text(),
-        parse_mode=ParseMode.HTML,
+        parse_mode="HTML",
         reply_markup=guide_keyboard(),
         disable_web_page_preview=True,
     )
@@ -327,7 +338,7 @@ async def reset_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
                 "The system is primed for fresh processing parameters.",
             ]
         ),
-        parse_mode=ParseMode.HTML,
+        parse_mode="HTML",
         reply_markup=main_menu(),
     )
 
@@ -336,7 +347,7 @@ async def show_settings(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
     user = db.get_user(update.effective_chat.id)
     await update.message.reply_text(
         settings_text(user),
-        parse_mode=ParseMode.HTML,
+        parse_mode="HTML",
         reply_markup=settings_keyboard(user),
         disable_web_page_preview=True,
     )
@@ -345,7 +356,7 @@ async def show_settings(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
 async def show_guide(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     await update.message.reply_text(
         guide_text(),
-        parse_mode=ParseMode.HTML,
+        parse_mode="HTML",
         reply_markup=guide_keyboard(),
         disable_web_page_preview=True,
     )
@@ -355,7 +366,7 @@ async def show_tokens(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
     user = db.get_user(update.effective_chat.id)
     await update.message.reply_text(
         token_status_text(user),
-        parse_mode=ParseMode.HTML,
+        parse_mode="HTML",
         reply_markup=InlineKeyboardMarkup(
             [[InlineKeyboardButton("Open Settings", callback_data="open:settings")]]
         ),
@@ -417,7 +428,7 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
 
     await query.edit_message_text(
         text,
-        parse_mode=ParseMode.HTML,
+        parse_mode="HTML",
         reply_markup=keyboard,
         disable_web_page_preview=True,
     )
@@ -431,7 +442,7 @@ async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
     if text == MENU_ASK:
         await update.message.reply_text(
             prompt_for_question_text(user),
-            parse_mode=ParseMode.HTML,
+            parse_mode="HTML",
             reply_markup=main_menu(),
         )
         return
@@ -453,7 +464,7 @@ async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
         f"<b>Processing Query...</b>\n"
         f"{DIVIDER}\n"
         f"<i>Analyzing transaction instructions...</i>",
-        parse_mode=ParseMode.HTML,
+        parse_mode="HTML",
     )
 
     try:
